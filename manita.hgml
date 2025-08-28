@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Rhythm Blade</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d0221;
+            --primary-color: #00f6ff;
+            --secondary-color: #ff00c1;
+            --accent-color: #faff00;
+            --text-color: #f0f0f0;
+            --perfect-color: #00f6ff;
+            --great-color: #4CAF50;
+            --good-color: #faff00;
+            --miss-color: #f44336;
+        }
+
+        /* --- การตั้งค่าพื้นฐาน --- */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            -webkit-user-select: none; /* Safari */
+            -ms-user-select: none; /* IE 10+ */
+            user-select: none;
+        }
+
+        /* --- คอนเทนเนอร์หลักของเกม --- */
+        #game-container {
+            width: 100%;
+            height: 100%;
+            max-width: 800px;
+            max-height: 100vh;
+            position: relative;
+            box-shadow: 0 0 30px var(--primary-color), 0 0 60px var(--secondary-color) inset;
+            border: 2px solid var(--primary-color);
+            border-radius: 15px;
+            background: radial-gradient(circle, rgba(13,2,33,0.95) 0%, rgba(13,2,33,1) 70%);
+        }
+
+        /* --- Canvas สำหรับวาดเกม --- */
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: 13px;
+        }
+
+        /* --- UI Elements --- */
+        .ui-element {
+            position: absolute;
+            text-shadow: 0 0 5px #fff, 0 0 10px var(--primary-color), 0 0 15px var(--primary-color);
+            font-weight: 900;
+            letter-spacing: 2px;
+            pointer-events: none;
+        }
+
+        #score {
+            top: 20px;
+            left: 20px;
+            font-size: 2.5em;
+            color: var(--accent-color);
+        }
+
+        #combo {
+            top: 20px;
+            right: 20px;
+            font-size: 2.5em;
+            text-align: right;
+            color: var(--primary-color);
+        }
+        
+        #combo-text {
+            font-size: 0.5em;
+            display: block;
+        }
+
+        #health-bar-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50%;
+            height: 20px;
+            border: 2px solid var(--primary-color);
+            border-radius: 10px;
+            background-color: rgba(0,0,0,0.3);
+            box-shadow: 0 0 10px var(--primary-color);
+        }
+
+        #health-bar {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--secondary-color), var(--primary-color));
+            border-radius: 8px;
+            transition: width 0.2s ease-out;
+        }
+
+        /* --- ข้อความกลางจอ (Judgement, Start, Game Over) --- */
+        #judgement {
+            top: 40%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 4em;
+            opacity: 0;
+            transition: all 0.1s;
+        }
+
+        .judgement-anim {
+            animation: judgement-pop 0.5s forwards;
+        }
+
+        @keyframes judgement-pop {
+            0% { transform: translateX(-50%) scale(0.8); opacity: 1; }
+            50% { transform: translateX(-50%) scale(1.2); opacity: 1; }
+            100% { transform: translateX(-50%) scale(1); opacity: 0; }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+        }
+
+
+        /* --- หน้าจอเมนูและจบเกม --- */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(13, 2, 33, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+            border-radius: 13px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .overlay h1 {
+            font-size: 5em;
+            margin: 0;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(255,255,255,0.5);
+        }
+
+        .overlay p {
+            font-size: 1.2em;
+            margin: 10px 0 30px 0;
+        }
+
+        .overlay .button-group {
+            display: flex;
+            gap: 20px;
+        }
+
+        .overlay button {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            font-size: 1.5em;
+            padding: 15px 40px;
+            border: 2px solid var(--primary-color);
+            border-radius: 50px;
+            background: transparent;
+            color: var(--primary-color);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-shadow: 0 0 5px var(--primary-color);
+            box-shadow: 0 0 10px var(--primary-color) inset, 0 0 10px var(--primary-color);
+        }
+
+        .overlay button:hover {
+            background: var(--primary-color);
+            color: var(--bg-color);
+            box-shadow: 0 0 20px var(--primary-color) inset, 0 0 20px var(--primary-color);
+        }
+
+        /* --- หน้าวิธีเล่น --- */
+        #how-to-play-screen .instructions {
+            max-width: 500px;
+            text-align: left;
+            font-size: 1.1em;
+        }
+        #how-to-play-screen .instructions p {
+            margin: 15px 0;
+            line-height: 1.6;
+        }
+        #how-to-play-screen .instructions strong {
+            color: var(--accent-color);
+        }
+        #how-to-play-screen button {
+            margin-top: 30px;
+        }
+        
+        /* --- Responsive Design --- */
+        @media (max-width: 600px) {
+            #score, #combo {
+                font-size: 1.8em;
+            }
+            #judgement {
+                font-size: 3em;
+            }
+            .overlay h1 {
+                font-size: 3.5em;
+            }
+            .overlay p {
+                font-size: 1em;
+                padding: 0 10px;
+            }
+            .overlay button {
+                font-size: 1.2em;
+                padding: 12px 25px;
+            }
+            .overlay .button-group {
+                flex-direction: column;
+            }
+            #how-to-play-screen .instructions {
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        
+        <!-- UI Elements -->
+        <div id="score" class="ui-element">0</div>
+        <div id="combo" class="ui-element">0<span id="combo-text">COMBO</span></div>
+        <div id="health-bar-container">
+            <div id="health-bar"></div>
+        </div>
+        <div id="judgement" class="ui-element"></div>
+        
+        <!-- Overlays -->
+        <div id="start-screen" class="overlay">
+            <h1>Rhythm Blade</h1>
+            <p>ฟันศัตรูตามจังหวะเพลง!</p>
+            <div class="button-group">
+                <button id="start-button">เริ่มเกม</button>
+                <button id="how-to-play-button">วิธีเล่น</button>
+            </div>
+        </div>
+
+        <div id="how-to-play-screen" class="overlay" style="display: none;">
+            <h1>วิธีเล่น</h1>
+            <div class="instructions">
+                <p><strong>เป้าหมาย:</strong> ฟันโน้ต (ศัตรู) ที่พุ่งเข้ามาให้ตรงกับจังหวะและทิศทางที่ถูกต้องเพื่อทำคะแนนสูงสุด</p>
+                <p><strong>💻 คอมพิวเตอร์:</strong> ใช้ <strong>ปุ่มลูกศร (← ↑ → ↓)</strong> หรือ <strong>ปุ่ม W, A, S, D</strong> เพื่อฟันตามทิศทางของโน้ต</p>
+                <p><strong>📱 มือถือ:</strong> <strong>ปัดหน้าจอ</strong> ไปในทิศทางเดียวกับที่โน้ตพุ่งเข้ามา</p>
+                <p><strong>คะแนน:</strong> ยิ่งฟันได้แม่นยำ (<strong>PERFECT, GREAT</strong>) ก็จะยิ่งได้คะแนนสูงและเพิ่มค่า <strong>COMBO</strong></p>
+                <p><strong>พลังชีวิต:</strong> หากฟันพลาด (<strong>MISS</strong>) หรือปล่อยให้โน้ตเข้ามาถึงตัว พลังชีวิตจะลดลง เกมจะจบลงเมื่อพลังชีวิตหมด</p>
+            </div>
+            <button id="back-button">กลับ</button>
+        </div>
+
+        <div id="game-over-screen" class="overlay" style="display: none;">
+            <h1>จบเกม</h1>
+            <p id="final-score"></p>
+            <button id="restart-button">เล่นอีกครั้ง</button>
+        </div>
+    </div>
+
+    <script>
+    // ใช้ IIFE เพื่อป้องกันการรั่วไหลของตัวแปรสู่ global scope
+    (function() {
+        // --- การตั้งค่า Canvas และ Context ---
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('game-container');
+
+        // --- การตั้งค่า UI Elements ---
+        const scoreEl = document.getElementById('score');
+        const comboEl = document.getElementById('combo');
+        const judgementEl = document.getElementById('judgement');
+        const healthBarEl = document.getElementById('health-bar');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const howToPlayScreen = document.getElementById('how-to-play-screen');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const howToPlayButton = document.getElementById('how-to-play-button');
+        const backButton = document.getElementById('back-button');
+        const finalScoreEl = document.getElementById('final-score');
+
+        // --- ตัวแปรสถานะเกม ---
+        let score = 0;
+        let combo = 0;
+        let maxCombo = 0;
+        let health = 100;
+        let notes = [];
+        let particles = [];
+        let gameState = 'MENU'; // MENU, PLAYING, GAMEOVER
+        let lastTime = 0;
+        let animationFrameId;
+
+        // --- ค่าคงที่ของเกม ---
+        const NOTE_SPEED = 0.25;
+        const DIRECTIONS = { UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3 };
+        const HIT_WINDOW = {
+            PERFECT: 30,
+            GREAT: 60,
+            GOOD: 90,
+        };
+        const HEALTH_DAMAGE = 10;
+        const HEALTH_REGEN = 0.5;
+
+        // --- การตั้งค่าขนาด Canvas ให้ Responsive ---
+        function resizeCanvas() {
+            canvas.width = gameContainer.clientWidth;
+            canvas.height = gameContainer.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- Player Object ---
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 40,
+            slashState: { direction: null, time: 0 },
+            draw() {
+                // วาดโซนเป้าหมาย
+                const zoneRadius = this.radius + 10;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                const directions = [
+                    { angle: -Math.PI / 2, color: 'hsl(180, 100%, 50%)' }, // UP
+                    { angle: Math.PI / 2, color: 'hsl(300, 100%, 50%)' },  // DOWN
+                    { angle: Math.PI, color: 'hsl(60, 100%, 50%)' },      // LEFT
+                    { angle: 0, color: 'hsl(0, 100%, 70%)' }              // RIGHT
+                ];
+
+                directions.forEach((dir, index) => {
+                    ctx.save();
+                    ctx.rotate(dir.angle);
+                    ctx.beginPath();
+                    ctx.moveTo(zoneRadius, -15);
+                    ctx.lineTo(zoneRadius + 20, 0);
+                    ctx.lineTo(zoneRadius, 15);
+                    ctx.closePath();
+                    
+                    if (this.slashState.direction === index && this.slashState.time > 0) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${this.slashState.time / 100})`;
+                        ctx.shadowColor = dir.color;
+                        ctx.shadowBlur = 20;
+                    } else {
+                        ctx.strokeStyle = dir.color;
+                        ctx.lineWidth = 2;
+                        ctx.shadowColor = dir.color;
+                        ctx.shadowBlur = 10;
+                        ctx.stroke();
+                    }
+                    ctx.fill();
+                    ctx.restore();
+                });
+                
+                // วาดแกนกลางผู้เล่น
+                const gradient = ctx.createRadialGradient(0, 0, this.radius * 0.2, 0, 0, this.radius);
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                gradient.addColorStop(0.5, 'rgba(0, 246, 255, 0.8)');
+                gradient.addColorStop(1, 'rgba(0, 246, 255, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            },
+            update(deltaTime) {
+                if (this.slashState.time > 0) {
+                    this.slashState.time -= deltaTime;
+                } else {
+                    this.slashState.direction = null;
+                }
+            },
+            slash(direction) {
+                this.slashState = { direction: direction, time: 100 };
+                // FIX: Use triggerAttackRelease with a short, fixed duration 
+                // to prevent timing errors on rapid presses.
+                sfx.slash.triggerAttackRelease(0.05);
+            }
+        };
+        
+        // --- Audio Engine (Tone.js) ---
+        const sfx = {
+            hitPerfect: new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination(),
+            hitGreat: new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).toDestination(),
+            miss: new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.1 } }).toDestination(),
+            slash: new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.01, decay: 0.05, sustain: 0, release: 0.05 } }).toDestination(),
+        };
+
+        const music = {
+            synth: new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "fmsquare", modulationType: "sawtooth", modulationIndex: 0.2 },
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.1 },
+                volume: -12
+            }).toDestination(),
+            bass: new Tone.MonoSynth({
+                oscillator: { type: "fmsawtooth", modulationType: 'square', harmonicity: 0.5 },
+                envelope: { attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.8 },
+                volume: -8
+            }).toDestination(),
+            drums: new Tone.MembraneSynth({
+                pitchDecay: 0.01,
+                octaves: 10,
+                envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 },
+                volume: -6
+            }).toDestination()
+        };
+        music.synth.connect(new Tone.Filter(400, "lowpass").toDestination());
+        music.bass.connect(new Tone.Chorus(4, 2.5, 0.5).toDestination());
+
+        // --- Beatmap ---
+        // 't' = time, 'd' = direction (0:U, 1:D, 2:L, 3:R)
+        const beatmap = [
+            {t: "0:0:0", d: 2}, {t: "0:0:2", d: 3}, {t: "0:1:0", d: 0}, {t: "0:1:2", d: 1},
+            {t: "0:2:0", d: 2}, {t: "0:2:2", d: 3}, {t: "0:3:0", d: 0}, {t: "0:3:2", d: 1},
+            {t: "1:0:0", d: 0}, {t: "1:0:2", d: 2}, {t: "1:1:0", d: 1}, {t: "1:1:2", d: 3},
+            {t: "1:2:0", d: 0}, {t: "1:2:2", d: 2}, {t: "1:3:0", d: 1}, {t: "1:3:2", d: 3},
+            // Chorus
+            {t: "2:0:0", d: 0}, {t: "2:0:1", d: 1}, {t: "2:0:2", d: 2}, {t: "2:0:3", d: 3},
+            {t: "2:1:0", d: 0}, {t: "2:1:1", d: 1}, {t: "2:1:2", d: 2}, {t: "2:1:3", d: 3},
+            {t: "2:2:0", d: 0}, {t: "2:2:2", d: 1}, {t: "2:3:0", d: 2}, {t: "2:3:2", d: 3},
+            {t: "3:0:0", d: 0}, {t: "3:0:1", d: 1}, {t: "3:0:2", d: 2}, {t: "3:0:3", d: 3},
+            {t: "3:1:0", d: 0}, {t: "3:1:1", d: 1}, {t: "3:1:2", d: 2}, {t: "3:1:3", d: 3},
+            {t: "3:2:0", d: 0}, {t: "3:2:2", d: 1}, {t: "3:3:0", d: 2}, {t: "3:3:2", d: 3},
+        ];
+
+        // --- Music Generation ---
+        function setupMusic() {
+            const melodyPart = new Tone.Part((time, note) => {
+                music.synth.triggerAttackRelease(note.name, note.duration, time);
+            }, [
+                { time: "0:0", name: "C4", duration: "8n" }, { time: "0:1", name: "E4", duration: "8n" },
+                { time: "0:2", name: "G4", duration: "8n" }, { time: "0:3", name: "E4", duration: "8n" },
+                { time: "1:0", name: "D4", duration: "8n" }, { time: "1:1", name: "F4", duration: "8n" },
+                { time: "1:2", name: "A4", duration: "8n" }, { time: "1:3", name: "F4", duration: "8n" },
+            ]).start(0);
+            melodyPart.loop = 2;
+            melodyPart.loopEnd = "2m";
+
+            const bassPart = new Tone.Part((time, note) => {
+                music.bass.triggerAttackRelease(note, "4n", time);
+            }, ["C2", "G1", "D2", "A1"]).start(0);
+            bassPart.loop = 2;
+            bassPart.loopEnd = "2m";
+
+            const drumLoop = new Tone.Loop(time => {
+                music.drums.triggerAttackRelease("C1", "8n", time);
+            }, "4n").start(0);
+
+            const noteSpawner = new Tone.Part((time, value) => {
+                createNote(value.d);
+            }, beatmap).start(0);
+        }
+        
+        // --- Game Object Creation ---
+        function createNote(direction) {
+            let x, y;
+            switch (direction) {
+                case DIRECTIONS.UP:    x = canvas.width / 2; y = canvas.height + 50; break;
+                case DIRECTIONS.DOWN:  x = canvas.width / 2; y = -50; break;
+                case DIRECTIONS.LEFT:  x = canvas.width + 50; y = canvas.height / 2; break;
+                case DIRECTIONS.RIGHT: x = -50; y = canvas.height / 2; break;
+            }
+            notes.push({
+                x, y, direction,
+                size: 20,
+                color: ['hsl(180, 100%, 70%)', 'hsl(300, 100%, 70%)', 'hsl(60, 100%, 70%)', 'hsl(0, 100%, 70%)'][direction],
+                draw() {
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    const angle = [Math.PI, 0, Math.PI * 1.5, Math.PI * 0.5][this.direction];
+                    ctx.rotate(angle);
+                    ctx.fillStyle = this.color;
+                    ctx.shadowColor = this.color;
+                    ctx.shadowBlur = 15;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -this.size * 0.8);
+                    ctx.lineTo(this.size, this.size * 0.8);
+                    ctx.lineTo(-this.size, this.size * 0.8);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+                },
+                update(deltaTime) {
+                    const targetX = player.x;
+                    const targetY = player.y;
+                    const angle = Math.atan2(targetY - this.y, targetX - this.x);
+                    this.x += Math.cos(angle) * NOTE_SPEED * deltaTime;
+                    this.y += Math.sin(angle) * NOTE_SPEED * deltaTime;
+                }
+            });
+        }
+
+        function createParticles(x, y, colorStr) {
+            const colorParts = colorStr.match(/\d+/g);
+            if (!colorParts || colorParts.length < 3) return;
+            const [h, s, l] = colorParts;
+
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    size: Math.random() * 5 + 2,
+                    life: 100,
+                    h, s, l,
+                    draw() {
+                        ctx.fillStyle = `hsla(${this.h}, ${this.s}%, ${this.l}%, ${this.life / 100})`;
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    },
+                    update(deltaTime) {
+                        this.x += this.vx;
+                        this.y += this.vy;
+                        this.life -= 2 * (deltaTime/16);
+                    }
+                });
+            }
+        }
+
+        // --- Game Logic ---
+        function checkHit(direction) {
+            player.slash(direction);
+            let hit = false;
+            for (let i = notes.length - 1; i >= 0; i--) {
+                const note = notes[i];
+                if (note.direction === direction) {
+                    const dist = Math.hypot(note.x - player.x, note.y - player.y);
+                    if (dist < HIT_WINDOW.GOOD + player.radius) {
+                        let judgementText;
+                        let scoreMultiplier = 0;
+                        let healthGain = 0;
+                        
+                        if (dist < HIT_WINDOW.PERFECT + player.radius) {
+                            judgementText = 'PERFECT';
+                            scoreMultiplier = 2;
+                            healthGain = HEALTH_REGEN * 2;
+                            sfx.hitPerfect.triggerAttackRelease("C6", "8n");
+                        } else if (dist < HIT_WINDOW.GREAT + player.radius) {
+                            judgementText = 'GREAT';
+                            scoreMultiplier = 1.5;
+                            healthGain = HEALTH_REGEN;
+                            sfx.hitGreat.triggerAttackRelease("G5", "8n");
+                        } else {
+                            judgementText = 'GOOD';
+                            scoreMultiplier = 1;
+                            healthGain = HEALTH_REGEN / 2;
+                            sfx.hitGreat.triggerAttackRelease("E5", "8n");
+                        }
+                        
+                        showJudgement(judgementText);
+                        combo++;
+                        score += 100 * scoreMultiplier * (1 + combo / 10);
+                        health = Math.min(100, health + healthGain);
+                        createParticles(note.x, note.y, note.color);
+                        notes.splice(i, 1);
+                        hit = true;
+                        break; // Hit one note per slash
+                    }
+                }
+            }
+        }
+
+        function missNote(note) {
+            showJudgement('MISS');
+            sfx.miss.triggerAttackRelease("2n");
+            if (combo > maxCombo) maxCombo = combo;
+            combo = 0;
+            health -= HEALTH_DAMAGE;
+            
+            gameContainer.style.animation = 'shake 0.2s';
+            setTimeout(() => gameContainer.style.animation = '', 200);
+
+            if (health <= 0) {
+                health = 0;
+                endGame();
+            }
+        }
+
+        function showJudgement(text) {
+            judgementEl.textContent = text;
+            judgementEl.classList.remove('judgement-anim');
+            void judgementEl.offsetWidth; // Force browser reflow
+            judgementEl.classList.add('judgement-anim');
+            
+            const colorVar = `--${text.toLowerCase()}-color`;
+            const color = getComputedStyle(document.documentElement).getPropertyValue(colorVar);
+            judgementEl.style.color = color;
+            judgementEl.style.textShadow = `0 0 10px ${color}, 0 0 20px ${color}`;
+        }
+
+        function updateUI() {
+            scoreEl.textContent = Math.floor(score);
+            comboEl.innerHTML = `${combo}<span id="combo-text">COMBO</span>`;
+            healthBarEl.style.width = `${health}%`;
+        }
+
+        // --- Game Loop ---
+        function gameLoop(timestamp) {
+            if (gameState !== 'PLAYING') return;
+
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // --- Update Logic ---
+            player.x = canvas.width / 2;
+            player.y = canvas.height / 2;
+            player.update(deltaTime);
+
+            for (let i = notes.length - 1; i >= 0; i--) {
+                const note = notes[i];
+                note.update(deltaTime);
+                const dist = Math.hypot(note.x - player.x, note.y - player.y);
+                if (dist < player.radius) {
+                    missNote(note);
+                    notes.splice(i, 1);
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update(deltaTime);
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+            
+            updateUI();
+
+            // --- Draw Logic ---
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+
+            notes.forEach(note => note.draw());
+            particles.forEach(particle => particle.draw());
+            player.draw();
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+        
+        function drawGrid() {
+            const gridSize = 50;
+            ctx.strokeStyle = 'rgba(0, 246, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        // --- Game State Control ---
+        function startGame() {
+            Tone.start().then(() => {
+                resetGame();
+                gameState = 'PLAYING';
+                startScreen.style.display = 'none';
+                gameOverScreen.style.display = 'none';
+                howToPlayScreen.style.display = 'none';
+                
+                setupMusic();
+                Tone.Transport.bpm.value = 140;
+                Tone.Transport.start();
+
+                lastTime = performance.now();
+                animationFrameId = requestAnimationFrame(gameLoop);
+            });
+        }
+
+        function endGame() {
+            gameState = 'GAMEOVER';
+            if (Tone.Transport.state === 'started') {
+                Tone.Transport.stop();
+            }
+            Tone.Transport.cancel();
+            cancelAnimationFrame(animationFrameId);
+
+            if (combo > maxCombo) maxCombo = combo;
+            finalScoreEl.innerHTML = `คะแนนสูงสุด: ${Math.floor(score)}<br>คอมโบสูงสุด: ${maxCombo}`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function resetGame() {
+            score = 0;
+            combo = 0;
+            maxCombo = 0;
+            health = 100;
+            notes = [];
+            particles = [];
+            updateUI();
+        }
+
+        // --- Input Handling ---
+        function handleKeyDown(e) {
+            if (gameState !== 'PLAYING') return;
+            let direction = null;
+            switch (e.key) {
+                case 'ArrowUp': case 'w': direction = DIRECTIONS.UP; break;
+                case 'ArrowDown': case 's': direction = DIRECTIONS.DOWN; break;
+                case 'ArrowLeft': case 'a': direction = DIRECTIONS.LEFT; break;
+                case 'ArrowRight': case 'd': direction = DIRECTIONS.RIGHT; break;
+            }
+            if (direction !== null) {
+                e.preventDefault();
+                checkHit(direction);
+            }
+        }
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+        function handleTouchStart(e) {
+            if (gameState !== 'PLAYING') return;
+            e.preventDefault();
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }
+
+        function handleTouchEnd(e) {
+            if (gameState !== 'PLAYING') return;
+            e.preventDefault();
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const dx = touchEndX - touchStartX;
+            const dy = touchEndY - touchStartY;
+            const swipeDist = Math.hypot(dx, dy);
+
+            if (swipeDist > 30) { 
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    checkHit(dx > 0 ? DIRECTIONS.RIGHT : DIRECTIONS.LEFT);
+                } else {
+                    checkHit(dy > 0 ? DIRECTIONS.DOWN : DIRECTIONS.UP);
+                }
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown);
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+        
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+        
+        howToPlayButton.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            howToPlayScreen.style.display = 'flex';
+        });
+
+        backButton.addEventListener('click', () => {
+            howToPlayScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+        });
+
+    })();
+    </script>
+</body>
+</html>
